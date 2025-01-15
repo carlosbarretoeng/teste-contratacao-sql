@@ -8,29 +8,83 @@ SELECT ProductID, ProductName FROM Products WHERE Discontinued = 0;
 -- Crie uma query que obtenha a lista de produtos descontinuados (ProductID e ProductName);
 SELECT ProductID, ProductName FROM Products WHERE Discontinued = 1;
 
--- Crie uma query que obtenha a lista de produtos (ProductID, ProductName, UnitPrice) ativos, onde o custo dos produtos s„o menores que $20;
+-- Crie uma query que obtenha a lista de produtos (ProductID, ProductName, UnitPrice) ativos, onde o custo dos produtos s√£o menores que $20;
 SELECT ProductID, ProductName, UnitPrice FROM Products WHERE Discontinued = 0 AND UnitPrice < 20;
 
--- Crie uma query que obtenha a lista de produtos (ProductID, ProductName, UnitPrice) ativos, onde o custo dos produtos s„o entre $15 e $25;
+-- Crie uma query que obtenha a lista de produtos (ProductID, ProductName, UnitPrice) ativos, onde o custo dos produtos s√£o entre $15 e $25;
 SELECT ProductID, ProductName, UnitPrice FROM Products WHERE Discontinued = 0 AND UnitPrice BETWEEN 15 AND 25;
 
--- Crie uma query que obtenha a lista de produtos (ProductName, UnitPrice) que tem preÁo acima da mÈdia;
+-- Crie uma query que obtenha a lista de produtos (ProductName, UnitPrice) que tem pre√ßo acima da m√©dia;
 WITH AveragePrice AS ( SELECT AVG(UnitPrice) AS AvgPrice FROM [dbo].[Products] ) SELECT ProductName, UnitPrice FROM Products, AveragePrice WHERE UnitPrice > AvgPrice;
 -- View Products Above Average Price
 
--- Crie uma procedure que retorne cada produto e seu preÁo;
---   Adicione ‡ procedure, criada na quest„o anterior, os par‚metros 'Codigo_Fornecedor' (permitindo escolher 1 ou mais) e 'Codigo_Categoria' 
---     (permitindo escolher 1 ou mais) e altere-a para atender a passagem desses par‚metros;
---   Adicione ‡ procedure, criada na quest„o anterior, o par‚metro 'Codigo_Transportadora' (permitindo escolher 1 ou mais) e um outro 
---     par‚metro 'Tipo_Saida' para se optar por uma saÌda OLTP (Transacional) ou OLAP (Pivot).
+-- Crie uma procedure que retorne cada produto e seu pre√ßo;
+--   Adicione √† procedure, criada na quest√£o anterior, os par√¢metros 'Codigo_Fornecedor' (permitindo escolher 1 ou mais) e 'Codigo_Categoria' 
+--     (permitindo escolher 1 ou mais) e altere-a para atender a passagem desses par√¢metros;
+--   Adicione √† procedure, criada na quest√£o anterior, o par√¢metro 'Codigo_Transportadora' (permitindo escolher 1 ou mais) e um outro 
+--     par√¢metro 'Tipo_Saida' para se optar por uma sa√≠da OLTP (Transacional) ou OLAP (Pivot).
 
--- Crie uma query que obtenha a lista de empregados e seus liderados, caso o empregado n„o possua liderado, informar 'N„o possui liderados'.
+CREATE OR ALTER PROCEDURE sp_ProdutosPorFiltro 
+    @Codigo_Fornecedor NVARCHAR(MAX) = NULL,
+    @Codigo_Categoria NVARCHAR(MAX) = NULL
+    -- @Codigo_Transportadora NVARCHAR(MAX) = NULL,
+    -- @Tipo_Saida NVARCHAR(10) = 'OLTP'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @FornecedorList TABLE (ID INT);
+    DECLARE @CategoriaList TABLE (ID INT);
+    DECLARE @TransportadoraList TABLE (ID INT);
+
+	IF @Codigo_Fornecedor IS NOT NULL
+        INSERT INTO @FornecedorList (ID)
+        SELECT value FROM STRING_SPLIT(@Codigo_Fornecedor, ',');
+
+    IF @Codigo_Categoria IS NOT NULL
+        INSERT INTO @CategoriaList (ID)
+        SELECT value FROM STRING_SPLIT(@Codigo_Categoria, ',');
+
+    --IF @Codigo_Transportadora IS NOT NULL
+    --    INSERT INTO @TransportadoraList (ID)
+    --    SELECT value FROM STRING_SPLIT(@Codigo_Transportadora, ',');
+
+    WITH ShippersWithProductsOrders AS (
+        SELECT s.ShipperID, s.CompanyName, od.ProductId, COUNT(od.ProductId) as quant
+		FROM Orders o
+		JOIN Shippers s ON o.ShipVia = s.ShipperID
+		JOIN [Order Details] od ON o.OrderID = od.OrderID
+		GROUP BY s.ShipperID, s.CompanyName, od.ProductId
+    )
+	SELECT 
+        p.ProductID,
+        p.ProductName,
+        p.UnitPrice,
+		s.SupplierID,
+		s.CompanyName as SupplierName,
+		c.CategoryID,
+		c.CategoryName,
+		swpo.CompanyName,
+		swpo.quant
+    FROM 
+        Products p
+		LEFT JOIN Suppliers s ON p.SupplierID = s.SupplierID
+		LEFT JOIN Categories c ON p.CategoryID = c.CategoryID
+		LEFT JOIN ShippersWithProductsOrders swpo ON p.ProductID = swpo.ProductID
+	WHERE
+		(@Codigo_Fornecedor IS NULL OR p.SupplierID IN (SELECT ID FROM @FornecedorList)) AND
+		(@Codigo_Categoria IS NULL OR p.CategoryID IN (SELECT ID FROM @CategoriaList));
+END;
+GO
+
+EXECUTE sp_ProdutosPorFiltro NULL, NULL;
+
+-- Crie uma query que obtenha a lista de empregados e seus liderados, caso o empregado n√£o possua liderado, informar 'N√£o possui liderados'.
 WITH LideradoPorLider AS (
 	SELECT 
 		l.EmployeeID AS LiderID,
 		l.FirstName + ' ' + l.LastName AS Lider,
 		CASE 
-			WHEN e.EmployeeID IS NULL THEN 'N„o possui liderados'
+			WHEN e.EmployeeID IS NULL THEN 'N√£o possui liderados'
 			ELSE e.FirstName + ' ' + e.LastName
 		END AS Liderado
 	FROM 
@@ -65,7 +119,7 @@ WHERE
     RankMaisBarato = 1 OR RankMaisCaro = 1
 ORDER BY 
     Tipo, UnitPrice;
--- Crie uma query que obtenha a lista de pedidos dos funcion·rios da regi„o 'Western';
+-- Crie uma query que obtenha a lista de pedidos dos funcion√°rios da regi√£o 'Western';
 WITH EmployeesOnWestern AS (
 	SELECT e.EmployeeID
 	FROM Employees e
@@ -77,8 +131,8 @@ WITH EmployeesOnWestern AS (
 SELECT *
 FROM Orders o
 JOIN EmployeesOnWestern eow ON o.EmployeeID = eow.EmployeeID
--- Crie uma query que obtenha os n˙meros de pedidos e a lista de clientes (CompanyName, ContactName, Address e Phone), que possuam 171 
---   como cÛdigo de ·rea do telefone e que o frete dos pedidos custem entre $6.00 e $13.00;
+-- Crie uma query que obtenha os n√∫meros de pedidos e a lista de clientes (CompanyName, ContactName, Address e Phone), que possuam 171 
+--   como c√≥digo de √°rea do telefone e que o frete dos pedidos custem entre $6.00 e $13.00;
 WITH CustomersFromArea171 AS (
 	SELECT c.CustomerID, c.CompanyName, c.ContactName, c.Address, c.Phone
 	FROM Customers c
@@ -106,7 +160,7 @@ JOIN Shippers s ON o.ShipVia = s.ShipperID
 WHERE s.CompanyName = 'Speedy Express';
 
 -- Crie uma query que obtenha a lista de Produtos (ProductName) constantes nos Detalhe dos Pedidos (Order Details), calculando o valor 
---   total de cada produto j· aplicado o desconto % (se tiver algum);
+--   total de cada produto j√° aplicado o desconto % (se tiver algum);
 SELECT 
 	od.OrderID, 
 	p.ProductName,
